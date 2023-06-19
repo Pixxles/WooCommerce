@@ -3,7 +3,7 @@ Disclaimer: Please note that we no longer support older versions of SDKs and Mod
 PaymentNetwork Woocommerce Plugin
 ==============
 
-This module enables the use of https://gateway.cardstream.com payment gateway using the Woocommerce project http://www.woothemes.com.
+This module enables the use of https://pixxles.com payment gateway using the Woocommerce project http://www.woothemes.com.
 
 COMPATIBILITY
 ------------
@@ -72,7 +72,7 @@ Setup Instructions
 --------------------
 
 Setting up the module requires at a minimum a merchantID, a signature/secret key and
-a gateway URL i.e. https://gateway.cardstream.com to be entered in the plugin's settings.
+a gateway URL i.e. https://pixxles.com to be entered in the plugin's settings.
 
 You will then need to select an integration type to use.
 
