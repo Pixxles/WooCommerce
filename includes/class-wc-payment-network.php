@@ -416,7 +416,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		try {
 			$amountByCurrency = \P3\SDK\AmountHelper::calculateAmountByCurrency($amount, $order->get_currency());
 
-			$data = $this->gateway->refundRequest($order->get_transaction_id(), $amountByCurrency);
+			$data = $this->gateway->refundRequest($order->get_transaction_id(), $amountByCurrency, $reason);
 
 			$order->add_order_note($data['message']);
 
