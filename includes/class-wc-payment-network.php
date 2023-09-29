@@ -116,6 +116,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 				'title'       => __('Type of integration', $this->lang),
 				'type'        => 'select',
 				'options' => array(
+					'hosted'     => 'Hosted',
 					'direct'     => 'Direct 3-D Secure',
 				),
 				'description' => __('This controls method of integration.', $this->lang),
@@ -373,12 +374,10 @@ class WC_Payment_Network extends WC_Payment_Gateway
 			$this->capture_order($order_id),
 			$_POST['browserInfo'],
 			[
-				'type'                 => 1,
 				'cardNumber'           => $_POST['cardNumber'],
 				'cardExpiryMonth'      => $_POST['cardExpiryMonth'],
 				'cardExpiryYear'       => $_POST['cardExpiryYear'],
 				'cardCVV'              => $_POST['cardCVV'],
-				'remoteAddress'        => $_SERVER['REMOTE_ADDR'],
 				'threeDSRedirectURL'   => add_query_arg(
 					[
 						'wc-api' => 'wc_' . $this->id,
@@ -764,6 +763,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		// Fields for hash
 		$req = array(
 			'action'			  => 'SALE',
+			'type'                 => 1,
 			'merchantID'          => $this->settings['merchantID'],
 			'amount'              => $amount,
 			'currencyCode'        => $order->get_currency(),
@@ -776,6 +776,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 			'customerTown'		  => $order->get_billing_city(),
 			'customerPostCode'    => $order->get_billing_postcode(),
 			'customerEmail'       => $order->get_billing_email(),
+			'remoteAddress'        => $_SERVER['REMOTE_ADDR'],
 		);
 
 		$phone = $order->get_billing_phone();
