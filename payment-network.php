@@ -2,7 +2,7 @@
 /*
 Plugin Name: PaymentNetwork
 Description: Provides the PaymentNetwork Payment Gateway for WooCommerce
-Version: 1.3.1
+Version: 1.4.0
 */
 
 /**

@@ -776,7 +776,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 			'customerTown'		  => $order->get_billing_city(),
 			'customerPostCode'    => $order->get_billing_postcode(),
 			'customerEmail'       => $order->get_billing_email(),
-			'remoteAddress'        => $_SERVER['REMOTE_ADDR'],
+			'remoteAddress'       => $_SERVER['REMOTE_ADDR'],
 		);
 
 		$phone = $order->get_billing_phone();
