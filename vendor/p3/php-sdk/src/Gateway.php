@@ -3,34 +3,34 @@
 namespace P3\SDK;
 
 /**
- * Class to communicate with Cardstream
+ * Class to communicate with Pixxles.com
  */
 class Gateway
 {
 	/**
 	 * @var string	Gateway Hosted API Endpoint
 	 */
-	protected $hostedUrl = 'https://gateway.cardstream.com/paymentform/';
+	protected $hostedUrl;
 
 	/**
 	 * @var string	Gateway Hosted Modal API Endpoint
 	 */
-	protected $hostedModalUrl = 'https://gateway.cardstream.com/hosted/modal/';
+	protected $hostedModalUrl;
 
 	/**
 	 * @var string	Gateway Direct API Endpoint
 	 */
-	protected $directUrl = 'https://gateway.cardstream.com/direct/';
+	protected $directUrl;
 
 	/**
 	 * @var string	Merchant Account Id or Alias
 	 */
-	protected $merchantID = 100856;
+	protected $merchantID;
 
 	/**
 	 * @var string	Secret for above Merchant Account
 	 */
-	protected $merchantSecret = 'Circle4Take40Idea';
+	protected $merchantSecret;
 
 	/**
 	 * Useful response codes
@@ -186,7 +186,7 @@ HTML;
 	 * @param int $amount
 	 * @return array
 	 */
-	public function refundRequest(string $xref, int $amount): array {
+	public function refundRequest(string $xref, int $amount, $reason): array {
 		$queryPayload = [
 			'merchantID' => $this->merchantID,
 			'xref' => $xref,
@@ -214,8 +214,11 @@ HTML;
 					'type' => 1,
 					'action' => 'REFUND_SALE',
 					'amount' => $amount,
+					'reason' => $reason,
 				]);
 				break;
+			case 'rejected':
+				throw new \InvalidArgumentException('Unable to refund/void a rejected transaction');
 			default:
 				throw new \InvalidArgumentException('Something went wrong, we can\'t find transaction ' . $xref);
 		}

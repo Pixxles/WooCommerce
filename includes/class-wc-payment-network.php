@@ -22,11 +22,6 @@ class WC_Payment_Network extends WC_Payment_Gateway
 	/**
 	 * @var string
 	 */
-	public $default_merchant_country_code;
-
-	/**
-	 * @var string
-	 */
 	public $default_secret;
 
 	/**
@@ -58,7 +53,6 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		$this->method_description  				 = __($configs['method_description'], $this->lang);
 		$this->default_merchant_id 				 = $configs['default_merchant_id'];
 		$this->default_secret      				 = $configs['default_secret'];
-		$this->default_merchant_country_code 	 = $configs['default_merchant_country_code'];
 
 		$this->supports = array(
 			'subscriptions',
@@ -123,12 +117,10 @@ class WC_Payment_Network extends WC_Payment_Gateway
 				'type'        => 'select',
 				'options' => array(
 					'hosted'     => 'Hosted',
-					'hosted_v2'  => 'Hosted (Embedded)',
-					'hosted_v3'  => 'Hosted (Modal)',
 					'direct'     => 'Direct 3-D Secure',
 				),
 				'description' => __('This controls method of integration.', $this->lang),
-				'default'     => 'hosted'
+				'default'     => 'direct'
 			),
 			'description' => array(
 				'title'       => __('Description', $this->lang),
@@ -139,17 +131,8 @@ class WC_Payment_Network extends WC_Payment_Gateway
 			'merchantID' => array(
 				'title'       => __('Merchant ID', $this->lang),
 				'type'        => 'text',
-				'description' => __('Please enter your ' . $this->method_title . ' merchant ID', $this->lang),
+				'description' => __('Please enter your merchant ID', $this->lang),
 				'default'     => $this->default_merchant_id,
-				'custom_attributes' => [
-					'required'        => true,
-				],
-			),
-			'merchant_country_code' => array(
-				'title'       => __('Merchant country code', $this->lang),
-				'type'        => 'text',
-				'description' => __('Please enter your ' . $this->method_title . ' merchant country code', $this->lang),
-				'default'     => $this->default_merchant_country_code,
 				'custom_attributes' => [
 					'required'        => true,
 				],
@@ -391,12 +374,10 @@ class WC_Payment_Network extends WC_Payment_Gateway
 			$this->capture_order($order_id),
 			$_POST['browserInfo'],
 			[
-				'type'                 => 1,
 				'cardNumber'           => $_POST['cardNumber'],
 				'cardExpiryMonth'      => $_POST['cardExpiryMonth'],
 				'cardExpiryYear'       => $_POST['cardExpiryYear'],
 				'cardCVV'              => $_POST['cardCVV'],
-				'remoteAddress'        => $_SERVER['REMOTE_ADDR'],
 				'threeDSRedirectURL'   => add_query_arg(
 					[
 						'wc-api' => 'wc_' . $this->id,
@@ -434,7 +415,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		try {
 			$amountByCurrency = \P3\SDK\AmountHelper::calculateAmountByCurrency($amount, $order->get_currency());
 
-			$data = $this->gateway->refundRequest($order->get_transaction_id(), $amountByCurrency);
+			$data = $this->gateway->refundRequest($order->get_transaction_id(), $amountByCurrency, $reason);
 
 			$order->add_order_note($data['message']);
 
@@ -734,7 +715,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		if ((int)$response['responseCode'] === 0) {
 
 			$this->debug_log('INFO', "Payment for order {$response['orderRef']} was successful");
-			$this->on_order_success($response);
+			return $this->on_order_success($response);
 
 		} else if ((int)$response['responseCode'] === 65802) {
 
@@ -765,26 +746,26 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		$billing2 = $order->get_billing_address_2();
 
 		if (!empty($billing2)) {
-			$billing_address .= "\n" . $billing2;
+			$billing_address .= " " . $billing2;
 		}
-		$billing_address .= "\n" . $order->get_billing_city();
+		$billing_address .= " " . $order->get_billing_city();
 		$state = $order->get_billing_state();
 		if (!empty($state)) {
-			$billing_address .= "\n" . $state;
+			$billing_address .= " " . $state;
 			unset($state);
 		}
 		$country = $order->get_billing_country();
 		if (!empty($country)) {
-			$billing_address .= "\n" . $country;
+			$billing_address .= " " . $country;
 			unset($country);
 		}
 
 		// Fields for hash
 		$req = array(
 			'action'			  => 'SALE',
+			'type'                 => 1,
 			'merchantID'          => $this->settings['merchantID'],
 			'amount'              => $amount,
-			'countryCode'         => $this->settings['merchant_country_code'],
 			'currencyCode'        => $order->get_currency(),
 			'transactionUnique'   => uniqid($order->get_order_key() . '-'),
 			'orderRef'            => $order_id,
@@ -795,6 +776,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 			'customerTown'		  => $order->get_billing_city(),
 			'customerPostCode'    => $order->get_billing_postcode(),
 			'customerEmail'       => $order->get_billing_email(),
+			'remoteAddress'       => $_SERVER['REMOTE_ADDR'],
 		);
 
 		$phone = $order->get_billing_phone();
@@ -924,6 +906,12 @@ class WC_Payment_Network extends WC_Payment_Gateway
 
 		if (isset($response['responseCode']) && in_array($response['responseCode'], [66315, 66316, 66316, 66320])) {
 			$message = 'Double check to make sure that you entered your Credit Card number, CVV2 code, and Expiration Date correctly.';
+		}
+
+		// 40002 - RTD
+		// 40003 - 500
+		if (isset($response['responseCode']) && in_array($response['responseCode'], [40002, 40003])) {
+			$message = $response['responseMessage'];
 		}
 
 		$_SESSION['payment_gateway_error'] = $message;
