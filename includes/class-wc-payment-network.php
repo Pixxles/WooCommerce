@@ -17,7 +17,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 	/**
 	 * @var string
 	 */
-	public $default_merchant_id;
+	public $merchant_id;
 
 	/**
 	 * @var string
@@ -41,18 +41,31 @@ class WC_Payment_Network extends WC_Payment_Gateway
 	 */
 	protected static $logging_options;
 
+	/**
+	 * Module version
+	 * @var String
+	 */
+	protected $module_version;
+
+	/**
+	 * Key used to generate the nonce for AJAX calls.
+	 * @var string
+	 */
+	protected $nonce_key;
+
 	public function __construct()
 	{
 		$configs = include(dirname(__FILE__) . '/../config.php');
 
-		$this->has_fields          				 = false;
-		$this->id                  				 = str_replace(' ', '', strtolower($configs['gateway_title']));
-		$this->lang                				 = strtolower('woocommerce_' . $this->id);
-		$this->icon                				 = plugins_url('/', dirname(__FILE__)) . 'assets/img/logo.png';
-		$this->method_title        				 = __($configs['gateway_title'], $this->lang);
-		$this->method_description  				 = __($configs['method_description'], $this->lang);
-		$this->default_merchant_id 				 = $configs['default_merchant_id'];
-		$this->default_secret      				 = $configs['default_secret'];
+		$this->has_fields			= false;
+		$this->id					= str_replace(' ', '', strtolower($configs['default']['gateway_title']));
+		$this->lang					= strtolower('woocommerce_' . $this->id);
+		$this->icon					= plugins_url('/', dirname(__FILE__)) . 'assets/img/logo.png';
+		$this->method_title			= __($configs['default']['gateway_title'], $this->lang);
+		$this->method_description	= __($configs['default']['method_description'], $this->lang);
+		$this->module_version 		= (file_exists(dirname(__FILE__) . '/../VERSION') ? file_get_contents(dirname(__FILE__) . '/../VERSION') : "UV");
+
+		$this->nonce_key = '312b9f8852142b9c8fbc';
 
 		$this->supports = array(
 			'subscriptions',
@@ -71,9 +84,11 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		$this->init_settings();
 
 		// Get setting values
-		$this->title			 	 	= $this->settings['title'];
+		$this->title					= $this->settings['title'];
 		$this->description				= $this->settings['description'];
 		$this->merchant_signature_key	= $this->settings['signature'];
+		$this->merchant_id				= $this->settings['merchantID'];
+		$this->merchant_country_code	= $this->settings['merchant_country_code'];
 		static::$logging_options		= (empty($this->settings['logging_options']) ? null : array_flip(array_map('strtoupper', $this->settings['logging_options'])));
 
 		$this->gateway = new Gateway(
@@ -83,13 +98,12 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		);
 
 		// Hooks
-		add_action('wp_enqueue_scripts', array($this, 'payment_scripts'));
+		add_action('wp_enqueue_scripts', array($this, 'payment_scripts'),0);
 		add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
 		add_action('woocommerce_receipt_' . $this->id, array($this, 'receipt_page'));
 
 		add_action('woocommerce_api_wc_' . $this->id, array($this, 'process_response_callback'));
-		add_action('woocommerce_scheduled_subscription_payment_' . $this->id, array($this, 'process_scheduled_subscription_payment_callback'), 10, 3);
-		
+		add_action('woocommerce_scheduled_subscription_payment_' . $this->id, array($this, 'process_scheduled_subscription_payment_callback'), 10, 2);
 	}
 
 	/**
@@ -131,8 +145,17 @@ class WC_Payment_Network extends WC_Payment_Gateway
 			'merchantID' => array(
 				'title'       => __('Merchant ID', $this->lang),
 				'type'        => 'text',
-				'description' => __('Please enter your merchant ID', $this->lang),
-				'default'     => $this->default_merchant_id,
+				'description' => __('Please enter your ' . $this->method_title . ' merchant ID', $this->lang),
+				'default'     => $this->merchant_id,
+				'custom_attributes' => [
+					'required'        => true,
+				],
+			),
+			'merchant_country_code' => array(
+				'title'       => __('Merchant country code', $this->lang),
+				'type'        => 'text',
+				'description' => __('Please enter your ' . $this->method_title . ' merchant country code', $this->lang),
+				'default'     => $this->default_merchant_country_code,
 				'custom_attributes' => [
 					'required'        => true,
 				],
@@ -141,7 +164,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 				'title'       => __('Signature Key', $this->lang),
 				'type'        => 'text',
 				'description' => __('Please enter the signature key for the merchant account.', $this->lang),
-				'default'     => $this->default_secret,
+				'default'     => $this->merchant_signature_key,
 				'custom_attributes' => [
 					'required'        => true,
 				],
@@ -207,146 +230,102 @@ class WC_Payment_Network extends WC_Payment_Gateway
 				'cardCVV'            => @$_POST['cardCVV'],
 			];
 
+			// These default values for the device information will be replaced by
+			// the actual device information (if obtainable) when Hosted Fields is being used.
 			$deviceData = [
 				'deviceChannel'				=> 'browser',
 				'deviceIdentity'			=> (isset($_SERVER['HTTP_USER_AGENT']) ? htmlentities($_SERVER['HTTP_USER_AGENT']) : null),
 				'deviceTimeZone'			=> '0',
 				'deviceCapabilities'		=> '',
 				'deviceScreenResolution'	=> '1x1x1',
-				'deviceAcceptContent'		=> (isset($_SERVER['HTTP_ACCEPT']) ? htmlentities($_SERVER['HTTP_ACCEPT']) : null),
-				'deviceAcceptEncoding'		=> (isset($_SERVER['HTTP_ACCEPT_ENCODING']) ? htmlentities($_SERVER['HTTP_ACCEPT_ENCODING']) : null),
-				'deviceAcceptLanguage'		=> (isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) ? htmlentities($_SERVER['HTTP_ACCEPT_LANGUAGE']) : null),
-				'deviceAcceptCharset'		=> (isset($_SERVER['HTTP_ACCEPT_CHARSET']) ? htmlentities($_SERVER['HTTP_ACCEPT_CHARSET']) : null),
-			];
+				'deviceAcceptContent'		=> (isset($_SERVER['HTTP_ACCEPT']) ? htmlentities($_SERVER['HTTP_ACCEPT']) : '*/*'),
+				'deviceAcceptEncoding'		=> (isset($_SERVER['HTTP_ACCEPT_ENCODING']) ? htmlentities($_SERVER['HTTP_ACCEPT_ENCODING']) : '*'),
+				'deviceAcceptLanguage'		=> (isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) ? htmlentities($_SERVER['HTTP_ACCEPT_LANGUAGE']) : 'en-gb;q=0.001'),
+                'deviceAcceptCharset'		=> (isset($_SERVER['HTTP_ACCEPT_CHARSET']) ? htmlentities($_SERVER['HTTP_ACCEPT_CHARSET']) : null),
+            ];
 
 			$browserInfo = '';
 
 			foreach ($deviceData as $key => $value) {
-				$browserInfo .= '<input type="hidden" id="' . $key . '" name="browserInfo[' . $key . ']" value="' . htmlentities($value) . '" />';
+				echo '<input type="hidden" id="' . $key . '" name="browserInfo[' . $key . ']" value="' . htmlentities($value) . '" />';
 			}
 
-			$generateMonthOptions = function () use ($parameters) {
-				$str = '';
-				foreach (range(1, 12) as $value) {
-					$s = $parameters['cardExpiryMonth'] == $value ? 'selected' : '';
-					$str .= '<option value="' . str_pad($value, 2, '0', STR_PAD_LEFT) . '" ' . $s . '>' . $value . '</option>' . "\n";
-				}
+			$merchantID = $this->settings['merchantID'];
 
-				return $str;
-			};
+			echo <<<HTML
 
-			$generateYearOptions = function () use ($parameters) {
-				$str = '';
-				foreach (range(date('Y'), date('Y') + 12) as $value) {
-					$s = $parameters['cardExpiryYear'] == $value ? 'selected' : '';
-					$str .= '<option value="' . substr($value, 2) . '" ' . $s . '>' . $value . '</option>' . "\n";
-				}
-
-				return $str;
-			};
-
-			echo
-			/** @lang html */
-			<<<FORM
-			<div style = 'display:flex; flex-direction:column; margin-bottom: 1vh;'>
-			<label>Card Number</label>
-			<input type = 'text' id = 'field-cardNumber' name = 'cardNumber' value = '{$parameters['cardNumber']}' maxlength = '23' required = 'required'/>
-			</div>
-			<div style = 'display:flex; place-content:center space-between;'>
-			<div style = 'flex-direction: column; width: 45%; display: flex;'>
-			<label>Card Expiry Date</label>
-			<div>
-			<select style = 'width: 45%;' id = 'field-cardExpiryMonth' name = 'cardExpiryMonth' required = 'required'>
-			<option value = '' disabled selected>Month</option>
-			{$generateMonthOptions()}
-				</select>
-				<select style = 'width: 45%;' id = 'field-cardExpiryYear' name = 'cardExpiryYear' required = 'required'>
-				<option value = '' disabled selected>Year</option>
-				{$generateYearOptions()}
-					</select>
-					</div>
-					</div>
-					<div style = 'width: 40%; flex-direction: column; display: flex;'>
-					<label>CVV</label>
-					<input type = 'text' id = 'field-cardCVV' name = 'cardCVV' value = "{$parameters['cardCVV']}" maxlength = '4' required = 'required'/>
-					</div>
-					</div>
-					<br/>
-					$browserInfo
-					<script>
-					var screen_width = ( window && window.screen ? window.screen.width : '0' );
-					var screen_height = ( window && window.screen ? window.screen.height : '0' );
-					var screen_depth = ( window && window.screen ? window.screen.colorDepth : '0' );
-					var identity = ( window && window.navigator ? window.navigator.userAgent : '' );
-					var language = ( window && window.navigator ? ( window.navigator.language ? window.navigator.language : window.navigator.browserLanguage ) : '' );
-					var timezone = ( new Date() ).getTimezoneOffset();
-					var java = ( window && window.navigator ? navigator.javaEnabled() : false );
-					document.getElementById( 'deviceIdentity' ).value = identity;
-					document.getElementById( 'deviceTimeZone' ).value = timezone;
-					document.getElementById( 'deviceCapabilities' ).value = 'javascript' + ( java ? ',java' : '' );
-					document.getElementById( 'deviceAcceptLanguage' ).value = language;
-					document.getElementById( 'deviceScreenResolution' ).value = screen_width + 'x' + screen_height + 'x' + screen_depth;
-					</script>
-					<script type = 'text/javascript'>
-					var cardNumber = document.getElementById( 'field-cardNumber' );
-
-					payform.cardNumberInput( cardNumber );
-					cardNumber.addEventListener( 'change', e => {
-						e.target.style.borderColor = payform.validateCardNumber( e.target.value ) ? '#B0B0B0' : 'red';
-
+				<style class="hf-input-style">
+					.hostedfield {
+						font-size: 20px;
+						font-weight: 500;
+						padding: 4px;
 					}
-				);
+					.hostedfield:invalid {
+						border: 1px solid #ff2b2b;
+							
+					}
+					.hostedfield:valid {
+						border: 1px solid #1fb52c;		
+					}
+				</style>	
 
-				document.getElementById( 'field-cardCVV' ).addEventListener( 'change', e => {
-					e.target.style.borderColor = payform.validateCardCVC( e.target.value ) ? '#B0B0B0' : 'red';
+				<!-- Card payment container (hosted fields) -->
+				<div id="payment-options-container" class="hf-box-container">
 
-				}
-			);
+					<input type="hidden" id="merchantID" name="merchantID" value="{$merchantID}">
+					<input type="hidden" id="paymentToken" name="paymentToken" value="">
+					<input type="hidden" id="hosted-fields-security-code" name="hosted-fields-security-code" value="">
+					<input type="hidden" id="hosted-fields-error-input" name="hosted-fields-error-input" value="">
 
-			var cardExpiryMonthElement = document.getElementById( 'field-cardExpiryMonth' );
-			var cardExpiryYearElement = document.getElementById( 'field-cardExpiryYear' );
+					<div class="hf-container-col">
+						<label for="form-card-number">Card Number</label>
+						<input
+						id="form-card-number"
+						type="hostedfield:cardNumber"
+						name="card-number"
+						autocomplete="cc-number"
+						required
+						data-hostedfield='{"stylesheet":"style.hf-input-style", "placeholder":"Card Number", "submitOnEnter":false}'>
+					</div>
 
-			var listener = e => {
-				let isValid = payform.validateCardExpiry( cardExpiryMonthElement.value, '20'+cardExpiryYearElement.value );
+					<div class="hf-container-row">
 
-				cardExpiryMonthElement.style.borderColor =  isValid ? '#B0B0B0' : 'red';
+						<div class="hf-container-col">
+							<label for="form-card-cvv">Expiry Date</label>
+							<input
+							id="form-card-expiry-date"
+							type="hostedfield:cardExpiryDate"
+							name="card-expiry-date"
+							autocomplete="cc-exp"
+							required 
+							data-hostedfield='{"stylesheet":"style.hf-input-style", "placeholder":"MM/YY", "submitOnEnter":false}'>
+						</div>
 
-				cardExpiryYearElement.style.borderColor = isValid ? '#B0B0B0' : 'red';
+						<div class="hf-container-col">
+							<label for="form-card-cvv">CVV</label>
+							<input
+							id="form-card-cvv"
+							type="hostedfield:cardCVV"
+							name="card-cvv"
+							autocomplete="cc-csc"
+							required 
+							data-hostedfield='{"stylesheet":"style.hf-input-style", "placeholder":"CVV", "submitOnEnter":false}'>
+						</div>
 
+					</div>
+
+					<div id="hosted-fields-error" class="hf-container-row hosted-fields-error"></div>
+
+				</div>
+
+				<script>
+					// Trigger payment fields ready event.
+					document.body.dispatchEvent(new Event("payment-fields-ready"))
+				</script>
+	HTML;
 			}
-			;
-
-			cardExpiryMonthElement.addEventListener( 'change', listener );
-			cardExpiryYearElement.addEventListener( 'change', listener );
-			</script>
-			FORM;
-
-			wp_enqueue_style('gateway-credit-card-styles', plugins_url('assets/css/gateway.css', dirname(__FILE__)));
-		}
-	}
-
-	public function validate_fields()
-	{
-		if ($this->settings['type'] === 'direct') {
-			$result = CreditCard::validCreditCard($_POST['cardNumber']);
-
-			if (!$result['valid']) {
-				wc_add_notice('Not a valid Card Number. Please check the card details.', 'error');
-				return false;
-			}
-
-			if (!CreditCard::validDate('20' . $_POST['cardExpiryYear'], $_POST['cardExpiryMonth'])) {
-				wc_add_notice('Not a valid Expiry Date. Please check the card details.', 'error');
-				return false;
-			}
-
-			if (!CreditCard::validCvc($_POST['cardCVV'], $result['type'])) {
-				wc_add_notice('Not a valid Card CVV. Please check the card details.', 'error');
-				return false;
-			}
-		}
-
-		return true;
+		// Output Module version as HTML comment on checkout page.
+		echo "<!-- WC Module Version: {$this->module_version} -->";
 	}
 
 	/**
@@ -370,14 +349,19 @@ class WC_Payment_Network extends WC_Payment_Gateway
 			);
 		}
 
+		// If this is not a Hosted Form request then verify a secuirty
+		// code was submitted with the payment token.
+		if (!wp_verify_nonce($_POST['hosted-fields-security-code'], $this->nonce_key)) {
+			wp_die();
+		}
+
 		$args = array_merge(
 			$this->capture_order($order_id),
 			$_POST['browserInfo'],
 			[
-				'cardNumber'           => $_POST['cardNumber'],
-				'cardExpiryMonth'      => $_POST['cardExpiryMonth'],
-				'cardExpiryYear'       => $_POST['cardExpiryYear'],
-				'cardCVV'              => $_POST['cardCVV'],
+				'type'                 => 1,
+				'paymentToken'         => $_POST['paymentToken'],
+				'remoteAddress'        => $_SERVER['REMOTE_ADDR'],
 				'threeDSRedirectURL'   => add_query_arg(
 					[
 						'wc-api' => 'wc_' . $this->id,
@@ -402,33 +386,103 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		return $this->process_response_callback($response);
 	}
 
-	public function process_refund($order_id, $amount = null, $reason = '')
+	/**
+	 * Process Refund
+	 *
+	 * Refunds a settled transactions or cancels
+	 * one not yet settled.
+	 *
+	 * @param Interger        $amount
+	 * @param Float         $amount
+	 */
+	public function process_refund($orderID, $amount = null, $reason = '')
 	{
 		$this->debug_log('INFO', "Processing refund for order {$order_id} for the amount {$amount} and the reason {$reason}");
 
-		$order = wc_get_order($order_id);
+		// Get the transaction XREF from the order ID and the amount.
+		$order = wc_get_order($orderID);
+		$transactionXref = $order->get_transaction_id();
+		$amountToRefund = \P3\SDK\AmountHelper::calculateAmountByCurrency($amount, $order->get_currency());
 
+		// Check the order can be refunded.
 		if (!$this->can_refund_order($order)) {
 			return new WP_Error('error', __('Refund failed.', 'woocommerce'));
 		}
 
-		try {
-			$amountByCurrency = \P3\SDK\AmountHelper::calculateAmountByCurrency($amount, $order->get_currency());
+		// Query the transaction state.
+		$queryPayload = [
+			'merchantID' => $this->merchant_id,
+			'xref' => $transactionXref,
+			'action' => 'QUERY',
+		];
 
-			$data = $this->gateway->refundRequest($order->get_transaction_id(), $amountByCurrency, $reason);
+		// Sign the request and send to gateway.
+		$transaction = $this->gateway->directRequest($queryPayload);
 
-			$order->add_order_note($data['message']);
-
-			return true;
-		} catch (Exception $exception) {
-			return new WP_Error('error', $exception->getMessage());
+		if (empty($transaction['state'])) {
+			return new WP_Error('error', "Could not get the transaction state for {$transactionXref}");
 		}
+
+		if ($transaction['responseCode'] == 65558) {
+			return new WP_Error('error', "IP blocked primary");
+		}
+
+		// Build the refund request
+		$refundRequest = [
+			'merchantID' => $this->merchant_id,
+			'xref' => $transactionXref,
+		];
+
+		switch ($transaction['state']) {
+			case 'approved':
+			case 'captured':
+				// If amount to refund is equal to the total amount captured/approved then action is cancel.
+				if ($transaction['amountReceived'] === $amountToRefund || ($transaction['amountReceived'] - $amountToRefund <= 0)) {
+					$refundRequest['action'] = 'CANCEL';
+				} else {
+					$refundRequest['action'] = 'CAPTURE';
+					$refundRequest['amount'] = ($transaction['amountReceived'] - $amountToRefund);
+				}
+				break;
+
+			case 'accepted':
+				$refundRequest = array_merge($refundRequest, [
+					'action' => 'REFUND_SALE',
+					'amount' => $amountToRefund,
+				]);
+				break;
+
+			default:
+				return new WP_Error('error', "Transaction {$transactionXref} it not in a refundable state.");
+		}
+
+		// Sign the refund request and sign it.
+		$refundResponse = $this->gateway->directRequest($refundRequest);
+
+		// Handle the refund response
+		if (empty($refundResponse) && empty($refundResponse['responseCode'])) {
+
+			return new WP_Error('error', "Could not refund {$transactionXref}.");
+		} else {
+
+			$orderMessage = ($refundResponse['responseCode'] == "0" ? "Refund Successful" : "Refund Unsuccessful") . "<br/><br/>";
+
+			$state = $refundResponse['state'] ?? null;
+
+			if ($state != 'canceled') {
+				$orderMessage .= "Amount Refunded: " . number_format($amountToRefund / pow(10, $refundResponse['currencyExponent']), $refundResponse['currencyExponent']) . "<br/><br/>";
+			}
+
+			$order->add_order_note($orderMessage);
+			return true;
+		}
+
+		return new WP_Error('error', "Could not refund {$transactionXref}.");
 	}
 
 	/**
 	 * receipt_page
 	 */
-
 	public function receipt_page($order)
 	{
 		if (in_array($this->settings['type'], ['hosted', 'hosted_v2', 'hosted_v3'])) {
@@ -491,7 +545,8 @@ class WC_Payment_Network extends WC_Payment_Gateway
 	/**
 	 * On 3DS required
 	 */
-	public function on_threeds_required($res) {
+	public function on_threeds_required($res)
+	{
 
 		setcookie('threeDSRef',  $res['threeDSRef'], [
 			'expires' => time() + 600,
@@ -503,13 +558,12 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		]);
 
 		if (isset($_GET['3dsResponse'])) {
-			
+
 			// Echo out the ACS form that will auto submit and then stop executing immediately after.
 			echo Gateway::silentPost($res['threeDSURL'], $res['threeDSRequest']);
 			wp_die();
-
 		} else {
-		
+
 			return [
 				'result' => 'success',
 				'redirect' => add_query_arg(
@@ -554,7 +608,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		$xref = $xrefs[max(array_keys($xrefs))];
 
 		$req = array(
-			'merchantID' => $this->settings['merchantID'],
+			'merchantID' => $this->merchant_id,
 			'xref' => $xref,
 			'amount' => \P3\SDK\AmountHelper::calculateAmountByCurrency($amount_to_charge, $renewal_order->get_currency()),
 			'action' => "SALE",
@@ -640,8 +694,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 			$this->debug_log('DEBUG', 'ACS Postback data', $_POST);
 
 			$req = array(
-				'merchantID' => $this->settings['merchantID'],
-				'action' => 'SALE',
+				'merchantID' => $this->merchant_id,
 				// The following field must be passed to continue the 3DS request
 				'threeDSRef' => $_COOKIE['threeDSRef'],
 				'threeDSResponse' => $_POST,
@@ -688,7 +741,6 @@ class WC_Payment_Network extends WC_Payment_Gateway
 			$order->add_order_note(__(ucwords($this->method_title) . '- Duplicate Response!' . $order_notes, $this->lang));
 			// Redirect customer to order page.
 			$this->redirect($this->get_return_url($order));
-
 		} else if ($order->is_paid()) {
 
 			// Increase duplicate_payment_response_count by one if the inter
@@ -716,16 +768,13 @@ class WC_Payment_Network extends WC_Payment_Gateway
 
 			$this->debug_log('INFO', "Payment for order {$response['orderRef']} was successful");
 			return $this->on_order_success($response);
-
 		} else if ((int)$response['responseCode'] === 65802) {
 
 			return $this->on_threeds_required($response);
-
 		} else {
 			$this->debug_log('INFO', "Payment for order {$response['orderRef']} failed");
 			$this->process_error('Payment failed', $response);
 		}
-		
 	}
 
 	##########################
@@ -746,43 +795,53 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		$billing2 = $order->get_billing_address_2();
 
 		if (!empty($billing2)) {
-			$billing_address .= " " . $billing2;
+			$billing_address .= "\n" . $billing2;
 		}
-		$billing_address .= " " . $order->get_billing_city();
+		$billing_address .= "\n" . $order->get_billing_city();
 		$state = $order->get_billing_state();
 		if (!empty($state)) {
-			$billing_address .= " " . $state;
+			$billing_address .= "\n" . $state;
 			unset($state);
 		}
 		$country = $order->get_billing_country();
 		if (!empty($country)) {
-			$billing_address .= " " . $country;
+			$billing_address .= "\n" . $country;
 			unset($country);
 		}
 
 		// Fields for hash
 		$req = array(
-			'action'			  => 'SALE',
-			'type'                 => 1,
-			'merchantID'          => $this->settings['merchantID'],
-			'amount'              => $amount,
-			'currencyCode'        => $order->get_currency(),
-			'transactionUnique'   => uniqid($order->get_order_key() . '-'),
-			'orderRef'            => $order_id,
-			'customerName'        => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-			'customerCountryCode' => $order->get_billing_country(),
-			'customerAddress'     => $billing_address,
-			'customerCounty'	  => $order->get_billing_state(),
-			'customerTown'		  => $order->get_billing_city(),
-			'customerPostCode'    => $order->get_billing_postcode(),
-			'customerEmail'       => $order->get_billing_email(),
-			'remoteAddress'       => $_SERVER['REMOTE_ADDR'],
+			'action'				=> ($amount == 0 ? 'VERIFY' : 'SALE'),
+			'merchantID'			=> $this->merchant_id,
+			'amount'				=> $amount,
+			'countryCode'			=> $this->merchant_country_code,
+			'currencyCode'			=> $order->get_currency(),
+			'transactionUnique'		=> uniqid($order->get_order_key() . '-'),
+			'orderRef'				=> $order_id,
+			'customerName'			=> $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
+			'customerCountryCode'	=> $order->get_billing_country(),
+			'customerAddress'		=> $billing_address,
+			'customerCounty'		=> $order->get_billing_state(),
+			'customerTown'			=> $order->get_billing_city(),
+			'customerPostCode'		=> $order->get_billing_postcode(),
+			'customerEmail'			=> $order->get_billing_email(),
+			'merchantData'      => json_encode(array(
+				'platform' => 'WooCommerce',
+				'version' => $this->module_version
+			)),
 		);
 
 		$phone = $order->get_billing_phone();
 		if (!empty($phone)) {
 			$req['customerPhone'] = $phone;
 			unset($phone);
+		}
+
+		/**
+		 * Add extra fields for hosted intergrations.
+		 */
+		if (!empty($req['customerCountryCode']) && $this->settings['type'] !== 'direct') {
+			$req = array_merge($req, ['customerCountryCodeMandatory' => 'Y']);
 		}
 
 		/**
@@ -813,7 +872,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 				$wpdb->prepare(
 					"SELECT wallets_id FROM $wallet_table_name WHERE users_id = %d AND merchants_id = %d LIMIT 1",
 					get_current_user_id(),
-					$this->settings['merchantID']
+					$this->merchant_id
 				)
 			);
 
@@ -873,13 +932,13 @@ class WC_Payment_Network extends WC_Payment_Gateway
 
 		//when the wallets is enabled, the user is logged in and there is a wallet ID in the response.
 		if ($this->settings['customerWalletsEnabled'] === 'Y' && isset($response['walletID']) && $order->get_user_id() != 0) {
-			$wallet_table_name = $wpdb->prefix . 'woocommerce_' . 'payment_network_' . 'wallets';
+			$wallet_table_name = $wpdb->prefix . 'woocommerce_payment_network_wallets';
 
 			$customersWalletID = $wpdb->get_var(
 				$wpdb->prepare(
 					"SELECT wallets_id FROM $wallet_table_name WHERE users_id = %d AND merchants_id = %d AND wallets_id = %d LIMIT 1",
 					$order->get_user_id(),
-					$this->settings['merchantID'],
+					$this->merchant_id,
 					$response['walletID']
 				)
 			);
@@ -889,7 +948,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 				//Add walletID to request.
 				$wpdb->insert($wallet_table_name, [
 					'users_id' => $order->get_user_id(),
-					'merchants_id' => $this->settings['merchantID'],
+					'merchants_id' => $this->merchant_id,
 					'wallets_id' => $response['walletID']
 				]);
 			}
@@ -961,13 +1020,67 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		}
 
 		// if our payment gateway is disabled, we do not have to enqueue JS too
-		if ('no' === $this->enabled) {
+		if ($this->enabled === 'no') {
 			return;
 		}
 
-		// and this is our custom JS in your plugin directory that works with token.js
-		wp_register_script('woocommerce_payform', plugins_url('assets/js/payform.js', dirname(__FILE__)), array('jquery'));
-		wp_enqueue_script('woocommerce_payform');
+        // and this is our custom JS in your plugin directory that works with token.js
+        wp_register_script('woocommerce_payform', plugins_url('assets/js/payform.js', dirname(__FILE__)), array('jquery'));
+        wp_enqueue_script('woocommerce_payform');
+
+		// Register and enqueue PaymentFields CSS
+		wp_enqueue_style('hosted_payment_fields_css', plugins_url('/', dirname(__FILE__)) . 'assets/css/hostedfields.css',null,	rand(99,9999));
+
+		// Register PaymentFields JavaScript
+		$gatewayURL = $this->settings['gatewayURL'];
+		$hostedFieldsURL = "{$gatewayURL}/sdk/web/v1/js/hostedfields.min.js";
+
+		wp_enqueue_script(
+			'hosted_payment_fields_jquery_min',
+			'https://code.jquery.com/jquery-3.4.1.min.js'
+		);
+
+		wp_enqueue_script(
+			'hosted_payment_fields_jquery_validate',
+			'https://cdn.jsdelivr.net/npm/jquery-validation@1.19.1/dist/jquery.validate.min.js',
+			['hosted_payment_fields_jquery_min']
+		);
+
+		wp_enqueue_script(
+			'hosted_payment_fields_gateway_javascript',
+			$hostedFieldsURL,
+			null,
+			'1.0',
+		);
+
+		wp_enqueue_script(
+			'hosted_payment_fields_script',
+			plugins_url('/', dirname(__FILE__)) . 'assets/js/hostedfields.js',
+			['hosted_payment_fields_gateway_javascript'],
+			'1.0',
+		);
+
+		wp_localize_script('hosted_payment_fields_script', 'hfLocalizeVars', array(
+			'securitycode' => wp_create_nonce($this->nonce_key),
+		));
+
+	}
+
+	/**
+	 * Validates Hosted Fields data.
+	 */
+	public function validate_fields()
+	{
+		// If this is a direct integration and there are Hosted Fields error
+		// add them to WC error notices.
+		if ($this->settings['type'] === 'direct') {
+			if (!empty($_POST['hosted-fields-error-input'])) {
+				wc_add_notice($_POST['hosted-fields-error-input'], 'error');
+				return false;
+			}
+		}
+		// If no errors return true.
+		return true;
 	}
 
 	/**
@@ -978,9 +1091,8 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		// If logging is not null and $type isin logging verbose selection.
 		if (isset(static::$logging_options[$type])) {
 			wc_get_logger()->{$type}(print_r($logMessage, true) . print_r($objects, true), array('source' => $this->title));
-		}	
+		}
 		// If logging_options empty.
 		return;
 	}
-	
 }

@@ -141,7 +141,7 @@ class Gateway
 
 		if ($iframe) {
 			$htmlForm = <<<HTML
-<iframe id="paymentgatewayframe" name="paymentgatewayframe" frameBorder="0" seamless="seamless" style="width:699px; height:1100px;margin: 0 auto;display:block;"></iframe>
+<iframe id="paymentgatewayframe" name="paymentgatewayframe" frameBorder="0" seamless="seamless" style="width:100%; height:1800px;margin: 0 auto;display:block;"></iframe>
 HTML;
 			$htmlForm .= self::silentPost($url, $request, 'paymentgatewayframe');
 		} else {
@@ -186,7 +186,7 @@ HTML;
 	 * @param int $amount
 	 * @return array
 	 */
-	public function refundRequest(string $xref, int $amount, $reason): array {
+	public function refundRequest(string $xref, int $amount): array {
 		$queryPayload = [
 			'merchantID' => $this->merchantID,
 			'xref' => $xref,
@@ -214,11 +214,8 @@ HTML;
 					'type' => 1,
 					'action' => 'REFUND_SALE',
 					'amount' => $amount,
-					'reason' => $reason,
 				]);
 				break;
-			case 'rejected':
-				throw new \InvalidArgumentException('Unable to refund/void a rejected transaction');
 			default:
 				throw new \InvalidArgumentException('Something went wrong, we can\'t find transaction ' . $xref);
 		}
