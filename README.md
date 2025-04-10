@@ -18,11 +18,11 @@ PHP-BCMaths
 INTRODUCTION
 ------------
 
-This module enables the woocommerce customers to pay for their items using the Cardstream hosted form or direct payment gateway.
+This module enables the woocommerce customers to pay for their items using the Pixxles hosted form or direct payment gateway.
 
 What does it do?
 ----------------
-Presents the option to pay with credit card or debit card via the Cardstream payment gateway.
+Presents the option to pay with credit card or debit card via the Pixxles payment gateway.
 
 
 INSTALLATION
@@ -48,7 +48,7 @@ Manual installation
 
 3. Go to WooCommerce -> Settings and click on the Checkout tab.
 
-4. Find Cardstream in the Payment Gateways section 
+4. Find Pixxles in the Payment Gateways section 
 
 5. Click the settings button to configure and enable the gateway.
 
@@ -83,4 +83,4 @@ The module will also need to be enabled so it appears as a payment option on the
 
 **Disclaimer**
 
-Sample code, SDKs and modules have been created as reference material only. Modules are developed and tested against vanilla base platform installs only. Any further module compatibility would need to be tested by the user/merchant/developer. Version support is as shown within the associated VERSION section. All sample code, SDKs and modules offer foundation transaction functionality for merchant and developers to use as a guide and/or to adapt, enhance or otherwise build upon. For the avoidance of doubt, this means that some desired functionality may not be useable or exist. All sample code, SDKs or modules that are used will require complete full end to end testing by the user/merchant/developer. Further to this, use of any sample code, SDKs or modules, Cardstream bears no responsibility for; nor extends any warranty in regard to; nor accepts any liability arising due to any changes or errors in functionality that may result. Developers, merchants or other users of any sample code, SDKs or modules accept these conditions de facto upon usage.
+Sample code, SDKs and modules have been created as reference material only. Modules are developed and tested against vanilla base platform installs only. Any further module compatibility would need to be tested by the user/merchant/developer. Version support is as shown within the associated VERSION section. All sample code, SDKs and modules offer foundation transaction functionality for merchant and developers to use as a guide and/or to adapt, enhance or otherwise build upon. For the avoidance of doubt, this means that some desired functionality may not be useable or exist. All sample code, SDKs or modules that are used will require complete full end to end testing by the user/merchant/developer. Further to this, use of any sample code, SDKs or modules, Pixxles bears no responsibility for; nor extends any warranty in regard to; nor accepts any liability arising due to any changes or errors in functionality that may result. Developers, merchants or other users of any sample code, SDKs or modules accept these conditions de facto upon usage.
