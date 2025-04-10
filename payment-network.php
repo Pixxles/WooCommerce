@@ -2,7 +2,7 @@
 /*
 Plugin Name: PaymentNetwork
 Description: Provides the PaymentNetwork Payment Gateway for WooCommerce
-Version: 1.4.1
+Version: 1.5.1
 */
 
 /**
@@ -42,37 +42,7 @@ function init_wc_payment_network()
 
 	add_filter('woocommerce_payment_gateways', 'add_payment_network_payment_gateway');
 
-	/**
-	 * Add Apple Pay AJAX options
-	 */
 	include('includes/class-wc-payment-network.php');
-	include('includes/class-wc-payment-network-applepay.php');
-
-	// Validate Apple Pay merchant
-	add_action('wp_ajax_nopriv_process_applepay_payment', array(new WC_Payment_Network_ApplePay, 'process_applepay_payment'), 10, 2);
-	add_action('wp_ajax_process_applepay_payment', array(new WC_Payment_Network_ApplePay, 'process_applepay_payment'), 10, 2);
-	// Process Apple Pay payment token
-	add_action('wp_ajax_nopriv_validate_applepay_merchant', array(new WC_Payment_Network_ApplePay, 'validate_applepay_merchant'), 10, 2);
-	add_action('wp_ajax_validate_applepay_merchant', array(new WC_Payment_Network_ApplePay, 'validate_applepay_merchant'), 10, 2);
-
-	// Get Apple Pay request
-	add_action('wp_ajax_nopriv_get_applepay_request', array(new WC_Payment_Network_ApplePay, 'get_applepay_request'), 10, 2);
-	add_action('wp_ajax_get_applepay_request', array(new WC_Payment_Network_ApplePay, 'get_applepay_request'), 10, 2);
-
-	// Get updated Apple Pay request
-	add_action('wp_ajax_nopriv_get_shipping_methods', array(new WC_Payment_Network_ApplePay, 'get_shipping_methods'), 10, 2);
-	add_action('wp_ajax_get_shipping_methods', array(new WC_Payment_Network_ApplePay, 'get_shipping_methods'), 10, 2);
-
-	// Get updated Apple Pay request
-	add_action('wp_ajax_nopriv_update_shipping_method', array(new WC_Payment_Network_ApplePay, 'update_shipping_method'), 10, 2);
-	add_action('wp_ajax_update_shipping_method', array(new WC_Payment_Network_ApplePay, 'update_shipping_method'), 10, 2);
-
-	// Apple coupon code to Apple Pay request
-	add_action('wp_ajax_nopriv_apply_coupon_code', array(new WC_Payment_Network_ApplePay, 'apply_coupon_code'), 10, 2);
-	add_action('wp_ajax_update_apply_coupon_code', array(new WC_Payment_Network_ApplePay, 'apply_coupon_code'), 10, 2);
-
-	// Generate CSR and KEY files.
-	add_action('wp_ajax_generate_csr_and_key', array(new WC_Payment_Network_ApplePay, 'generate_csr_and_key'), 10, 2);
 }
 
 function add_wc_payment_network_action_plugin($actions, $plugin_file)
@@ -97,7 +67,6 @@ function add_wc_payment_network_action_plugin($actions, $plugin_file)
 function add_payment_network_payment_gateway($methods)
 {
 	$methods[] = 'WC_Payment_Network';
-	$methods[] = 'WC_Payment_Network_ApplePay';
 	return $methods;
 }
 
@@ -142,3 +111,43 @@ function delete_plugin_database_table()
 	//delete_option("my_plugin_db_version");
 	//error_log('Logging SQL table drop');
 }
+
+function pn_enqueue_frontend_scripts($hook) {
+    $merchant_id = '102444';
+    $environment = 'TEST';
+    $session_id = substr(uniqid().uniqid().uniqid(),0,32);
+
+    if (!is_checkout()) {
+        return;
+    }
+
+    if (function_exists('WC') && WC()->session) {
+        WC()->session->set('pn_session_id', $session_id);
+    }
+
+    wp_enqueue_script(
+        'pn-checkout-js',
+        plugin_dir_url(__FILE__) . 'assets/js/checkout.js',
+        array('jquery'),
+        '1.0.0',
+        true
+    );
+
+    wp_localize_script('pn-checkout-js', 'pnVars', array(
+        'ajax_url' => admin_url('admin-ajax.php'),
+        'nonce'    => wp_create_nonce('pn_nonce'),
+        'session_id' => $session_id,
+        'merchant_id'  => $merchant_id,
+        'environment' => $environment,
+    ));
+
+    wp_enqueue_script(
+        'kount-sdk',
+        plugin_dir_url(__FILE__) . 'assets/js/kount-web-client-sdk.js',
+        array(),
+        '1.0.0',
+        true
+    );
+}
+
+add_action('wp_enqueue_scripts', 'pn_enqueue_frontend_scripts');
