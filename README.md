@@ -64,7 +64,7 @@ This will allow you to set the defaults which are :
 
 gateway_title is the title of the module that will appear to the user when selecting the payment method on the checkout.
 method_description is the description that appears in the payment selected on checkout.
-default_merchant_id is the default merchant ID the module will use. It's recommended to use a test account.
+merchant_id is the default merchant ID the module will use. It's recommended to use a test account.
 default_secrect is the signature/secret for the default merchant.
 
 

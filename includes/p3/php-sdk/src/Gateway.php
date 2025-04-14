@@ -216,6 +216,8 @@ HTML;
 					'amount' => $amount,
 				]);
 				break;
+            case 'rejected':
+                throw new \InvalidArgumentException('Unable to refund/void a rejected transaction');
 			default:
 				throw new \InvalidArgumentException('Something went wrong, we can\'t find transaction ' . $xref);
 		}

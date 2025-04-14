@@ -505,10 +505,15 @@ class WC_Payment_Network extends WC_Payment_Gateway
 			$callback = add_query_arg('wc-api', 'wc_' . $this->id, home_url('/'));
 
 			$req = array_merge($this->capture_order($order), array(
+                'action' => 'SALE',
+                'type' => 1,
 				'redirectURL' => $redirect,
 				'callbackURL' => $callback . '&callback',
 				'formResponsive' => $this->settings['formResponsive'],
+                'sessionId' => sanitize_text_field(WC()->session->get('pn_session_id') ?? '')
 			));
+
+            unset($req['countryCode']);
 
 			echo $this->gateway->hostedRequest($req, 'hosted_v2' == $this->settings['type'], 'hosted_v3' == $this->settings['type']);
 		}
