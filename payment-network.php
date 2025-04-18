@@ -2,7 +2,7 @@
 /*
 Plugin Name: PaymentNetwork
 Description: Provides the PaymentNetwork Payment Gateway for WooCommerce
-Version: 1.6.0
+Version: 1.5.0
 */
 
 /**
@@ -115,8 +115,8 @@ function delete_plugin_database_table()
 function pn_enqueue_frontend_scripts($hook) {
     $configs = include(dirname(__FILE__) . '/config.php');
 
-    $merchant_id = $configs['default']['merchant_id'];
-    $environment = $configs['default']['environment'];
+    $kount_merchant_id = $configs['kount']['id'];
+    $environment = $configs['kount']['environment'];
     $session_id = substr(uniqid().uniqid().uniqid(),0,32);
 
     if (!is_checkout()) {
@@ -139,7 +139,7 @@ function pn_enqueue_frontend_scripts($hook) {
         'ajax_url' => admin_url('admin-ajax.php'),
         'nonce'    => wp_create_nonce('pn_nonce'),
         'session_id' => $session_id,
-        'merchant_id'  => $merchant_id,
+        'kount_merchant_id'  => $kount_merchant_id,
         'environment' => $environment,
     ));
 

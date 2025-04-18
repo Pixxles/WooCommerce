@@ -181,12 +181,13 @@ HTML;
 		return $response;
 	}
 
-	/**
-	 * @param string $xref
-	 * @param int $amount
-	 * @return array
-	 */
-	public function refundRequest(string $xref, int $amount): array {
+    /**
+     * @param string $xref
+     * @param int $amount
+     * @param $reason
+     * @return array
+     */
+	public function refundRequest(string $xref, int $amount, $reason): array {
 		$queryPayload = [
 			'merchantID' => $this->merchantID,
 			'xref' => $xref,
@@ -214,6 +215,7 @@ HTML;
 					'type' => 1,
 					'action' => 'REFUND_SALE',
 					'amount' => $amount,
+					'reason' => $reason,
 				]);
 				break;
             case 'rejected':

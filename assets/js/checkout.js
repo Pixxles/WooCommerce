@@ -6,7 +6,7 @@ jQuery(function ($) {
 
     if (typeof Kount !== 'undefined' && typeof Kount.setup === 'function') {
         const kountConfig = {
-            clientID: pnVars.merchant_id,
+            clientID: pnVars.kount_merchant_id,
             sessionID: pnVars.session_id,
             environment: pnVars.environment,
             collectBrowserData: true,
