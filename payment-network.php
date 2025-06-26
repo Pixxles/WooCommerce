@@ -2,7 +2,7 @@
 /*
 Plugin Name: PaymentNetwork
 Description: Provides the PaymentNetwork Payment Gateway for WooCommerce
-Version: 1.5.0
+Version: 1.6.0
 */
 
 /**
@@ -111,45 +111,3 @@ function delete_plugin_database_table()
 	//delete_option("my_plugin_db_version");
 	//error_log('Logging SQL table drop');
 }
-
-function pn_enqueue_frontend_scripts($hook) {
-    $configs = include(dirname(__FILE__) . '/config.php');
-
-    $kount_merchant_id = $configs['kount']['id'];
-    $environment = $configs['kount']['environment'];
-    $session_id = substr(uniqid().uniqid().uniqid(),0,32);
-
-    if (!is_checkout()) {
-        return;
-    }
-
-    if (function_exists('WC') && WC()->session) {
-        WC()->session->set('pn_session_id', $session_id);
-    }
-
-    wp_enqueue_script(
-        'pn-checkout-js',
-        plugin_dir_url(__FILE__) . 'assets/js/checkout.js',
-        array('jquery'),
-        '1.0.0',
-        true
-    );
-
-    wp_localize_script('pn-checkout-js', 'pnVars', array(
-        'ajax_url' => admin_url('admin-ajax.php'),
-        'nonce'    => wp_create_nonce('pn_nonce'),
-        'session_id' => $session_id,
-        'kount_merchant_id'  => $kount_merchant_id,
-        'environment' => $environment,
-    ));
-
-    wp_enqueue_script(
-        'kount-sdk',
-        plugin_dir_url(__FILE__) . 'assets/js/kount-web-client-sdk.js',
-        array(),
-        '1.0.0',
-        true
-    );
-}
-
-add_action('wp_enqueue_scripts', 'pn_enqueue_frontend_scripts');

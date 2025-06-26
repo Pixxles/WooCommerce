@@ -11,6 +11,7 @@ jQuery(function ($) {
             environment: pnVars.environment,
             collectBrowserData: true,
             isSinglePageApp: false,
+            isDebugEnabled: pnVars.environment === 'TEST',
         };
 
         Kount.setup(kountConfig);

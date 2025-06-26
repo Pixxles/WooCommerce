@@ -88,7 +88,6 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		$this->description				= $this->settings['description'];
 		$this->merchant_signature_key	= $this->settings['signature'];
 		$this->merchant_id				= $this->settings['merchantID'];
-		$this->merchant_country_code	= $this->settings['merchant_country_code'];
 		static::$logging_options		= (empty($this->settings['logging_options']) ? null : array_flip(array_map('strtoupper', $this->settings['logging_options'])));
 
 		$this->gateway = new Gateway(
@@ -104,6 +103,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 
 		add_action('woocommerce_api_wc_' . $this->id, array($this, 'process_response_callback'));
 		add_action('woocommerce_scheduled_subscription_payment_' . $this->id, array($this, 'process_scheduled_subscription_payment_callback'), 10, 2);
+        add_action('wp_enqueue_scripts', array($this, 'pn_enqueue_frontend_scripts'), 0);
 	}
 
 	/**
@@ -213,12 +213,13 @@ class WC_Payment_Network extends WC_Payment_Gateway
             echo wpautop(wp_kses_post($this->description));
         }
 
-        $session_id = WC()->session->get('pn_session_id');
-        if ($session_id) {
-            echo '<input type="hidden" name="pn_session_id" value="' . esc_attr($session_id) . '">';
-        }
-
         if ($this->settings['type'] === 'direct') {
+            $session_id = WC()->session->get('pn_session_id');
+
+            if ($session_id) {
+                echo '<input type="hidden" name="pn_session_id" value="' . esc_attr($session_id) . '">';
+            }
+
             $parameters = [
                 'cardNumber'         => @$_POST['cardNumber'],
                 'cardExpiryMonth'    => @$_POST['cardExpiryMonth'],
@@ -510,7 +511,6 @@ class WC_Payment_Network extends WC_Payment_Gateway
 				'redirectURL' => $redirect,
 				'callbackURL' => $callback . '&callback',
 				'formResponsive' => $this->settings['formResponsive'],
-                'sessionId' => sanitize_text_field(WC()->session->get('pn_session_id') ?? '')
 			));
 
             unset($req['countryCode']);
@@ -818,24 +818,26 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		if (!empty($billing2)) {
 			$billing_address .= "\n" . $billing2;
 		}
-		$billing_address .= "\n" . $order->get_billing_city();
-		$state = $order->get_billing_state();
-		if (!empty($state)) {
-			$billing_address .= "\n" . $state;
-			unset($state);
-		}
-		$country = $order->get_billing_country();
-		if (!empty($country)) {
-			$billing_address .= "\n" . $country;
-			unset($country);
-		}
+
+        if ($this->settings['type'] === 'direct') {
+            $billing_address .= "\n" . $order->get_billing_city();
+            $state = $order->get_billing_state();
+            if (!empty($state)) {
+                $billing_address .= "\n" . $state;
+                unset($state);
+            }
+            $country = $order->get_billing_country();
+            if (!empty($country)) {
+                $billing_address .= "\n" . $country;
+                unset($country);
+            }
+        }
 
 		// Fields for hash
 		$req = array(
 			'action'				=> ($amount == 0 ? 'VERIFY' : 'SALE'),
 			'merchantID'			=> $this->merchant_id,
 			'amount'				=> $amount,
-			'countryCode'			=> $this->merchant_country_code,
 			'currencyCode'			=> $order->get_currency(),
 			'transactionUnique'		=> uniqid($order->get_order_key() . '-'),
 			'orderRef'				=> $order_id,
@@ -1105,4 +1107,45 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		// If logging_options empty.
 		return;
 	}
+
+    public function pn_enqueue_frontend_scripts($hook)
+    {
+        $configs = include(dirname(__FILE__) . '/../config.php');
+
+        if (!is_checkout() || $this->settings['type'] != 'direct') {
+            return;
+        }
+
+        $kount_merchant_id = $configs['kount']['id'];
+        $environment = $configs['kount']['environment'];
+        $session_id = substr(uniqid() . uniqid() . uniqid(), 0, 32);
+
+        if (function_exists('WC') && WC()->session) {
+            WC()->session->set('pn_session_id', $session_id);
+        }
+
+        wp_enqueue_script(
+            'pn-checkout-js',
+            plugins_url('/', dirname(__FILE__)) . 'assets/js/checkout.js',
+            array('jquery'),
+            '1.0.0',
+            true
+        );
+
+        wp_localize_script('pn-checkout-js', 'pnVars', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce'    => wp_create_nonce('pn_nonce'),
+            'session_id' => $session_id,
+            'kount_merchant_id'  => $kount_merchant_id,
+            'environment' => $environment,
+        ));
+
+        wp_enqueue_script(
+            'kount-sdk',
+            plugins_url('/', dirname(__FILE__)) . 'assets/js/kount-web-client-sdk.js',
+            array(),
+            '1.0.0',
+            true
+        );
+    }
 }
