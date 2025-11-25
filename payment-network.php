@@ -1,8 +1,8 @@
 <?php
-/*
-Plugin Name: PaymentNetwork
-Description: Provides the PaymentNetwork Payment Gateway for WooCommerce
-Version: 1.6.0
+/**
+*Plugin Name: PaymentNetwork
+*Description: Provides the PaymentNetwork Payment Gateway for WooCommerce
+*Version: 1.6.3
 */
 
 /**
