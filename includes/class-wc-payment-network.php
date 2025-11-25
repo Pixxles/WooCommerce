@@ -221,28 +221,28 @@ class WC_Payment_Network extends WC_Payment_Gateway
             }
 
             $parameters = [
-                'cardNumber'         => @$_POST['cardNumber'],
-                'cardExpiryMonth'    => @$_POST['cardExpiryMonth'],
-                'cardExpiryYear'     => @$_POST['cardExpiryYear'],
-                'cardCVV'            => @$_POST['cardCVV'],
+                'cardNumber'      => isset($_POST['cardNumber'])      ? wc_clean(wp_unslash($_POST['cardNumber']))      : '',
+                'cardExpiryMonth' => isset($_POST['cardExpiryMonth']) ? wc_clean(wp_unslash($_POST['cardExpiryMonth'])) : '',
+                'cardExpiryYear'  => isset($_POST['cardExpiryYear'])  ? wc_clean(wp_unslash($_POST['cardExpiryYear']))  : '',
+                'cardCVV'         => isset($_POST['cardCVV'])         ? wc_clean(wp_unslash($_POST['cardCVV']))         : '',
             ];
 
             $deviceData = [
-                'deviceChannel'				=> 'browser',
-                'deviceIdentity'			=> (isset($_SERVER['HTTP_USER_AGENT']) ? htmlentities($_SERVER['HTTP_USER_AGENT']) : null),
-                'deviceTimeZone'			=> '0',
-                'deviceCapabilities'		=> '',
-                'deviceScreenResolution'	=> '1x1x1',
-                'deviceAcceptContent'		=> (isset($_SERVER['HTTP_ACCEPT']) ? htmlentities($_SERVER['HTTP_ACCEPT']) : null),
-                'deviceAcceptEncoding'		=> (isset($_SERVER['HTTP_ACCEPT_ENCODING']) ? htmlentities($_SERVER['HTTP_ACCEPT_ENCODING']) : null),
-                'deviceAcceptLanguage'		=> (isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) ? htmlentities($_SERVER['HTTP_ACCEPT_LANGUAGE']) : null),
-                'deviceAcceptCharset'		=> (isset($_SERVER['HTTP_ACCEPT_CHARSET']) ? htmlentities($_SERVER['HTTP_ACCEPT_CHARSET']) : null),
+                'deviceChannel'          => 'browser',
+                'deviceIdentity'         => isset($_SERVER['HTTP_USER_AGENT'])        ? sanitize_text_field( (string) $_SERVER['HTTP_USER_AGENT'] )        : '',
+                'deviceTimeZone'         => '0',
+                'deviceCapabilities'     => '',
+                'deviceScreenResolution' => '1x1x1',
+                'deviceAcceptContent'    => isset($_SERVER['HTTP_ACCEPT'])            ? sanitize_text_field( (string) $_SERVER['HTTP_ACCEPT'] )            : '',
+                'deviceAcceptEncoding'   => isset($_SERVER['HTTP_ACCEPT_ENCODING'])   ? sanitize_text_field( (string) $_SERVER['HTTP_ACCEPT_ENCODING'] )   : '',
+                'deviceAcceptLanguage'   => isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])   ? sanitize_text_field( (string) $_SERVER['HTTP_ACCEPT_LANGUAGE'] )   : '',
+                'deviceAcceptCharset'    => isset($_SERVER['HTTP_ACCEPT_CHARSET'])    ? sanitize_text_field( (string) $_SERVER['HTTP_ACCEPT_CHARSET'] )    : '',
             ];
 
             $browserInfo = '';
 
             foreach ($deviceData as $key => $value) {
-                $browserInfo .= '<input type="hidden" id="' . $key . '" name="browserInfo[' . $key . ']" value="' . htmlentities($value) . '" />';
+                $browserInfo .= '<input type="hidden" id="' . esc_attr($key) . '" name="browserInfo[' . esc_attr($key) . ']" value="' . esc_attr($value) . '" />';
             }
 
             $generateMonthOptions = function () use ($parameters) {
@@ -1054,10 +1054,7 @@ class WC_Payment_Network extends WC_Payment_Gateway
 		// Register and enqueue PaymentFields CSS
 		wp_enqueue_style('hosted_payment_fields_css', plugins_url('/', dirname(__FILE__)) . 'assets/css/hostedfields.css',null,	rand(99,9999));
 
-		wp_enqueue_script(
-			'hosted_payment_fields_jquery_min',
-			'https://code.jquery.com/jquery-3.4.1.min.js'
-		);
+        wp_enqueue_script('jquery');
 
 		wp_enqueue_script(
 			'hosted_payment_fields_jquery_validate',
